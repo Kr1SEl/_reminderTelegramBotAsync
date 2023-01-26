@@ -83,7 +83,7 @@ async def set_custom_frequency(update, context) -> int:
         return ConversationHandler.END
     logging.info("Reminder custom frequency of %s: %s",
                  user.first_name, context.user_data['r_freq'])
-    await update.message.reply_text("Well done! Tell me the day, when you would like to receive the first reminder (f:`yyyy-mm-dd`, e.g. '2002-11-08') \U0001F4C6:", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Well done! Tell me the day, when you would like to receive the first reminder (f:`yyyy-mm-dd`, e.g. `2002-11-08`) \U0001F4C6:", reply_markup=ReplyKeyboardRemove())
     return DATE
 
 
@@ -96,7 +96,7 @@ async def set_date(update, context) -> int:
         context.user_data['r_date'] = update.message.text
         logging.info("Reminder first date of %s: %s",
                      user.first_name, context.user_data['r_date'])
-        await update.message.reply_text("Very nice! Tell me the time to send you a reminder (f:`hh:mm`) \U000023F0:")
+        await update.message.reply_text("Very nice! Tell me the time to send you a reminder (f:`hh:mm`, e.g. `00:00`-`23:59`) \U000023F0:")
         return TIME
     else:
         logging.info("Invalid date input of %s: %s",
@@ -104,7 +104,7 @@ async def set_date(update, context) -> int:
         if validate_date[1] == 'date_less_than_today':
             await update.message.reply_text(f"The minimum possible date is <b>today - {str(datetime.now())[:10]}</b> \U0001F915. Please, try again:", parse_mode='HTML')
         else:
-            await update.message.reply_text("Date is invalid \U0001F915. Please, try again(f:`yyyy-mm-dd`, e.g. '2002-11-08'): ")
+            await update.message.reply_text("Date is invalid \U0001F915. Please, try again(f:`yyyy-mm-dd`, e.g. `2002-11-08`): ")
         return DATE
 
 
