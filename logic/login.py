@@ -3,6 +3,14 @@ import sqlite3
 from .api import *
 import logging
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
 
 
 async def email(update, context) -> int:

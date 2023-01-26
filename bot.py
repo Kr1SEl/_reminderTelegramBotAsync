@@ -121,9 +121,11 @@ def main() -> None:
             PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, password)],
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_description)],
-            FREQUENCY: [MessageHandler(filters.Regex("^(Monthly|Daily|Weekly|Custom)$"), set_frequency)],
+            FREQUENCY: [MessageHandler(filters.Regex("^(No repetition|Daily|Monthly|Custom)$"), set_frequency)],
             TIME: [MessageHandler(filters.Regex(
                 "^([01]?[0-9]|2[0-3]):[0-5][0-9]$"), set_time)],
+            DATE: [MessageHandler(filters.Regex(
+                "^\d{4}-\d{2}-\d{2}$"), set_date)],
             DELETE: [MessageHandler(filters.Regex(
                 "^[1-9][0-9]*$"), delete_reminder)],
             CUSTOM_FREQ: [MessageHandler(filters.Regex(
@@ -133,8 +135,8 @@ def main() -> None:
         fallbacks=[CommandHandler("menu", show_menu)],
     )
     application.add_handler(conv_handler)
-    application.job_queue.run_repeating(
-        callback_send_reminder, interval=60, first=3)
+    # application.job_queue.run_repeating(
+    #     callback_send_reminder, interval=60, first=3)
     application.run_polling()
 
 

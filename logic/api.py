@@ -1,6 +1,8 @@
 import requests
 import sqlite3
 import json
+import re
+from datetime import datetime, timedelta, date
 
 con = sqlite3.connect("users.sqlite")
 cur = con.cursor()
@@ -88,16 +90,76 @@ def fetchRemindersForAllUsers():
     headers = {}
     response = requests.request(
         "GET", url, headers=headers, data=payload).json()
-    return requests
+    return response
 
 
 def calculateCurrentReminders():
     reminders = fetchRemindersForAllUsers()
+    notify = list()
     if reminders == None:
         return None
     for rem in reminders:
-        ...
+        if rem['period'] == 0:
+            pass
+        elif rem['period'] < 0:
+            if check_reminder_months(rem['date'], rem['period'], date.now()):
+                ...
+        else:
+            if check_reminder_date(f"{rem['date']} {rem['time']}", rem['period'], date.now()):
+                ...
+    return notify
 
 
-def createReminder(r_name, r_freq, r_time):
-    return f'Reminder with name {r_name} created, will be repeated: {r_freq}. Notification will be sent in {r_time}'
+def check_reminder_days(start_date, frequency, current_date):
+    print(current_date)
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    current_date = datetime.strptime(current_date, "%Y-%m-%d")
+    delta = current_date - start_date
+    if delta.days % frequency == 0:
+        return True
+    else:
+        return False
+
+
+def check_reminder_months(start_date, frequency, current_date):
+    print(current_date)
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    current_date = datetime.strptime(current_date, "%Y-%m-%d")
+    delta_years = current_date.year - start_date.year
+    delta_months = current_date.month - start_date.month
+    months_since_start = delta_years*12 + delta_months
+    if months_since_start % frequency == 0:
+        return True
+    else:
+        return False
+
+
+def createReminder(user_id, r_name, r_desc, r_freq, r_date, r_time):
+    url = f"http://localhost:9080/user/{user_id}/add/reminder"
+    payload = json.dumps({
+        "name": f"{r_name}",
+        "description": f"{r_desc}",
+        "period": r_freq,
+        "date": f"{r_date}",
+        "time": f"{r_time}"
+    })
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    response = requests.request("POST", url, headers=headers, data=payload)
+    return response.status_code
+
+
+def dateIsValid(date):
+    date_regex = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    try:
+        if date_regex.match(date):
+            date = datetime.strptime(date, "%Y-%m-%d")
+            if date > datetime.now():
+                return True
+            else:
+                return False
+        else:
+            return False
+    except ValueError:
+        return False
