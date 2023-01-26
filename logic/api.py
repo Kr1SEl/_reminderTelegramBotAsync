@@ -9,11 +9,17 @@ cur = con.cursor()
 
 
 def addUser(user_id, app_name, app_surname, app_email, tg_username, tg_chat_id):
+    res = cur.execute(f"""
+    SELECT app_name FROM user WHERE user_id={user_id}
+    """).fetchall()
+    if len(res) > 0:
+        return (False, f'User <b>{res[0][0]}</b> is already connected to another Telegram account \U0001F6B7\n\nProvide email:')
     cur.execute(f"""
     INSERT INTO user VALUES
         ({user_id}, '{app_name}', '{app_surname}', '{app_email}', '{tg_username}', {tg_chat_id})
     """)
     con.commit()
+    return (True, )
 
 
 def userExists(user_id):
@@ -33,9 +39,12 @@ def loginUser(email, password, tg_username, tg_chat_id):
     }
     response = requests.request("POST", url, headers=headers, data=payload)
     if response.status_code == 200:
-        addUser(response.json()['id'], response.json()
-                ['name'], response.json()['surname'], response.json()['email'], tg_username, tg_chat_id)
-        return ("success", response.json()['name'])
+        db_response = addUser(response.json()['id'], response.json()
+                              ['name'], response.json()['surname'], response.json()['email'], tg_username, tg_chat_id)
+        if db_response[0] == False:
+            return ("user_conn_exists", db_response[1])
+        else:
+            return ("success", response.json()['name'])
     else:
         if response.json()['code'] == "INCORRECT_CREDENTIALS":
             return ("incorrect_cred",)
@@ -55,7 +64,7 @@ def listReminders(user_id):
     message = ""
     n = 1
     for rem in response:
-        message += f"№{n}: {rem['date']} - {rem['name']}\n"
+        message += f"`№{n}: {rem['date']} - {rem['name']}`\n"
         n += 1
     return message
 
@@ -154,12 +163,11 @@ def dateIsValid(date):
     date_regex = re.compile(r'^\d{4}-\d{2}-\d{2}$')
     try:
         if date_regex.match(date):
-            date = datetime.strptime(date, "%Y-%m-%d")
-            if date > datetime.now():
-                return True
+            if date[:10] >= str(datetime.now())[:10]:
+                return (True,)
             else:
-                return False
+                return (False, 'date_less_than_today')
         else:
-            return False
+            return (False, 'invalid_date')
     except ValueError:
-        return False
+        return (False, 'invalid_date')

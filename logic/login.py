@@ -18,7 +18,7 @@ async def email(update, context) -> int:
     user = update.message.from_user
     logging.info("Getting email")
     context.user_data['email'] = update.message.text
-    await update.message.reply_text("Provide your password: ")
+    await update.message.reply_text("Provide your password \U0001F511: ")
     return PASSWORD
 
 
@@ -30,14 +30,17 @@ async def password(update, context) -> int:
     login = loginUser(context.user_data.get('email', 'Not_found'), context.user_data.get(
         'pass', 'Not_found'), update.message.chat.username, update.message.chat_id)
     if login[0] == "success":
-        await update.message.reply_text(f"Nice to meet you {login[1]}! Now you can use commands. Check /help for its list")
+        await update.message.reply_text(f"Nice to meet you {login[1]}! Now you are allowed to use commands. Check out /help \U0001F978")
         return ConversationHandler.END
     elif login[0] == "incorrect_cred":
-        await update.message.reply_text(f'Incorrect Password. Try once again. Provide email:')
+        await update.message.reply_text(f'Incorrect Password \U0001F6B7. Try once again.\n\nProvide email:')
         return EMAIL
     elif login[0] == "no_user":
-        await update.message.reply_text(f'User with provided email is not registered. Maybe you should visit our application first. Check it out and return with your email right back:')
+        await update.message.reply_text(f'User with provided email is not registered \U0001F914. Maybe you should visit our application first. \n\nCheck it out and return with your email right back:')
+        return EMAIL
+    elif login[0] == "user_conn_exists":
+        await update.message.reply_text(login[1], parse_mode='HTML')
         return EMAIL
     else:
-        await update.message.reply_text(f'Login failed. Try once again. Provide email:')
+        await update.message.reply_text(f'Login failed \U0001F6B7. Try once again.\n\nProvide email:')
         return EMAIL

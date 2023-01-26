@@ -10,6 +10,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from datetime import datetime
 
 
 async def set_name(update, context) -> int:
@@ -18,7 +19,7 @@ async def set_name(update, context) -> int:
     context.user_data['r_name'] = update.message.text
     logging.info("Reminder name of %s: %s",
                  user.first_name, update.message.text)
-    await update.message.reply_text("Great! Write some description for your reminder: ")
+    await update.message.reply_text("Great! Write some description for your reminder \U0001F4DD:")
     return DESCRIPTION
 
 
@@ -29,7 +30,7 @@ async def set_description(update, context) -> int:
     context.user_data['r_desc'] = update.message.text
     logging.info("Reminder description of %s: %s",
                  user.first_name, update.message.text)
-    await update.message.reply_text("Great! Select frequency of reminder: ", reply_markup=ReplyKeyboardMarkup(
+    await update.message.reply_text("Okay. Select frequency of reminder \U0001F58B: ", reply_markup=ReplyKeyboardMarkup(
         reply_keyboard, one_time_keyboard=True, input_field_placeholder="How often the reminder should be repeated??"
     ))
     return FREQUENCY
@@ -49,11 +50,11 @@ async def set_frequency(update, context) -> int:
     elif freq == 'No repetition':
         context.user_data['r_freq'] = 0
     elif freq == 'Custom':
-        await update.message.reply_text("Please, select frequency measure: ", reply_markup=ReplyKeyboardMarkup(
+        await update.message.reply_text("Please, select frequency measure \U0001F321:", reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, one_time_keyboard=True, input_field_placeholder="Frequency measure?"))
         return CUSTOM_FREQ_MEASURE
-    await update.message.reply_text("Very nice! Tell me the time to send you a reminder(Format `hh:mm`)", reply_markup=ReplyKeyboardRemove())
-    return TIME
+    await update.message.reply_text("Very well! Tell me the day, when you would like to receive the first reminder (f:`yyyy-mm-dd`, e.g. `2002-11-08`) \U0001F4C6:", reply_markup=ReplyKeyboardRemove())
+    return DATE
 
 
 async def set_custom_frequency_measure(update, context) -> int:
@@ -62,7 +63,7 @@ async def set_custom_frequency_measure(update, context) -> int:
     context.user_data['r_freq_measure'] = update.message.text
     logging.info("Reminder custom frequency measure of %s: %s",
                  user.first_name, update.message.text)
-    await update.message.reply_text(f"How often you would like to receive reminder(number of <b>{update.message.text}</b>):", parse_mode='HTML', reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text(f"How often would you like to be reminded(number of <b>{update.message.text}</b>) \U000023F3:", parse_mode='HTML', reply_markup=ReplyKeyboardRemove())
     return CUSTOM_FREQ
 
 
@@ -78,27 +79,32 @@ async def set_custom_frequency(update, context) -> int:
     elif freq == 'Weeks':
         context.user_data['r_freq'] = period*7
     else:
-        await update.message.reply_text("Something went wrong. Try again, please!", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(f'Something went wrong, please try again later \U0001F4F6', reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     logging.info("Reminder custom frequency of %s: %s",
                  user.first_name, context.user_data['r_freq'])
-    await update.message.reply_text("Very nice! Tell me the day, when you would like to receive the first reminder(Format `yyyy-mm-dd`)", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Well done! Tell me the day, when you would like to receive the first reminder (f:`yyyy-mm-dd`, e.g. '2002-11-08') \U0001F4C6:", reply_markup=ReplyKeyboardRemove())
     return DATE
 
 
 async def set_date(update, context) -> int:
     """Stores the info about the reminder date"""
     user = update.message.from_user
-    if dateIsValid(update.message.text):
+    validate_date = dateIsValid(update.message.text)
+    print(validate_date)
+    if validate_date[0]:
         context.user_data['r_date'] = update.message.text
         logging.info("Reminder first date of %s: %s",
                      user.first_name, context.user_data['r_date'])
-        await update.message.reply_text("Very nice! Tell me the time to send you a reminder(Format `hh:mm`)")
+        await update.message.reply_text("Very nice! Tell me the time to send you a reminder (f:`hh:mm`) \U000023F0:")
         return TIME
     else:
         logging.info("Invalid date input of %s: %s",
                      user.first_name, update.message.text)
-        await update.message.reply_text("Date is invalid. Please, try again: ")
+        if validate_date[1] == 'date_less_than_today':
+            await update.message.reply_text(f"The minimum possible date is <b>today - {str(datetime.now())[:10]}</b> \U0001F915. Please, try again:", parse_mode='HTML')
+        else:
+            await update.message.reply_text("Date is invalid \U0001F915. Please, try again(f:`yyyy-mm-dd`, e.g. '2002-11-08'): ")
         return DATE
 
 
@@ -116,9 +122,9 @@ async def set_time(update, context) -> int:
         context.user_data.get('r_date', 'Not found'),
         context.user_data.get('r_time', 'Not found'))
     if response == 200:
-        message = 'Reminder succesfully created. Check it out using /list command'
+        message = 'Reminder succesfully created \U00002705'
     else:
-        message = 'Something went wrong, please try again later'
+        message = 'Something went wrong, please try again later \U0001F4F6'
     await update.message.reply_text(message)
     return ConversationHandler.END
 
@@ -131,5 +137,11 @@ async def delete_reminder(update, context) -> int:
                  user.first_name, rem_num)
     result = deleteReminder(context.user_data.get(
         'user_id', userExists(update.effective_chat.id)[0]), rem_num)
-    await update.message.reply_text(f"Well done! {result}")
+    if result == 'success':
+        await update.message.reply_text(f"Reminder Deleted \U00002705!")
+    elif result == 'incorrect_num':
+        await update.message.reply_text(f"Incorrect ID \U0000274C. Try again:")
+        return DELETE
+    else:
+        await update.message.reply_text(f'Something went wrong, please try again later \U0001F4F6')
     return ConversationHandler.END
