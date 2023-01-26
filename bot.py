@@ -100,6 +100,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def callback_send_reminder(context: ContextTypes.DEFAULT_TYPE):
+    reminders = calculateCurrentReminders()
     await context.bot.send_message(chat_id='5528046211', text='One message every minute')
 
 

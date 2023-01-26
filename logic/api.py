@@ -82,5 +82,22 @@ def deleteReminder(user_id, rem_num):
             return 'error'
 
 
+def fetchRemindersForAllUsers():
+    url = 'http://localhost:9080/reminder'
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload).json()
+    return requests
+
+
+def calculateCurrentReminders():
+    reminders = fetchRemindersForAllUsers()
+    if reminders == None:
+        return None
+    for rem in reminders:
+        ...
+
+
 def createReminder(r_name, r_freq, r_time):
     return f'Reminder with name {r_name} created, will be repeated: {r_freq}. Notification will be sent in {r_time}'
