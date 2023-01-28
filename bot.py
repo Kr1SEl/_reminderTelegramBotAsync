@@ -1,6 +1,7 @@
 import os
 import logging
 from dotenv import load_dotenv
+import telegram
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, constants
 from telegram.ext import (
     Application,
@@ -40,8 +41,37 @@ async def add(update, context) -> int:
     if userExists(update.effective_chat.id):
         user = update.message.from_user
         logging.info("Starting conversation about reminder creation")
-        await update.message.reply_text("Reminder wizzard is here \U0001F52E. To cancel acton write /menu.\nThink about the name for your reminder \U0001F914: ")
-        return NAME
+        if len(getGroupsOfUser(context.user_data.get(
+                'user_id', userExists(update.effective_chat.id)[0]))) > 0:
+            context.user_data['act'] = 'add_reminder'
+            reply_keyboard = [["Group", "Account"]]
+            await update.message.reply_text("Reminder wizzard is here \U0001F52E. To cancel action write /menu.\nPlease, select where to add a reminder \U0001F518:",
+                                            reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True, input_field_placeholder="Where to add?"
+                                                                             ))
+            return ACTION_SELECTION
+        else:
+            await update.message.reply_text("Reminder wizzard is here \U0001F52E. To cancel action write /menu.\nThink about the name for your reminder \U0001F914:")
+            return NAME
+    else:
+        await update.message.reply_text(f'Seems like you have not connected your Telegram account to reminder system yet \U0001F512.\n\nProvide email:')
+        return EMAIL
+
+
+async def add_user_to_group(update, context) -> int:
+    """Starts conversation about reminder creation"""
+    if userExists(update.effective_chat.id):
+        user = update.message.from_user
+        logging.info("Starting conversation about addition user to group")
+        groups = getGroupsOfUser(context.user_data.get(
+            'user_id', userExists(update.effective_chat.id)[0]))
+        if len(groups) > 0:
+            context.user_data['act'] = 'add_user_to_group'
+            parsed_groups = parseGroups(groups)
+            await update.message.reply_text(f"Please, provide Group ID \n\nYour groups \U0001F46F: \n{parsed_groups}. To cancel action write / menu.")
+            return GROUP_SELECTION
+        else:
+            await update.message.reply_text(f"You have no grups \U00002639")
+            return ConversationHandler.END
     else:
         await update.message.reply_text(f'Seems like you have not connected your Telegram account to reminder system yet \U0001F512.\n\nProvide email:')
         return EMAIL
@@ -52,13 +82,13 @@ async def list_rem(update, context) -> int:
     if userExists(update.effective_chat.id):
         user = update.message.from_user
         logging.info("Listing user reminders")
-        reminders = listReminders(
+        reminders = listRemindersAndGroupReminders(
             context.user_data.get('user_id', userExists(update.effective_chat.id)[0]))
         if reminders == None:
             await update.message.reply_text(f"You have no reminders, there is nothing to show \U0001F60C")
             return ConversationHandler.END
         else:
-            await update.message.reply_text(f"Your reminders \U0001F4D1: \n{reminders}", parse_mode=constants.ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"{reminders}", parse_mode=constants.ParseMode.MARKDOWN_V2)
             return ConversationHandler.END
     else:
         await update.message.reply_text(f'Seems like you have not connected your Telegram account to reminder system yet \U0001F512.\n\nProvide email:')
@@ -70,14 +100,23 @@ async def delete(update, context) -> int:
     if userExists(update.effective_chat.id):
         user = update.message.from_user
         logging.info("Starting conversation about reminder delition")
-        reminders = listReminders(
-            context.user_data.get('user_id', userExists(update.effective_chat.id)[0]))
-        if reminders == None:
-            await update.message.reply_text(f"You have no reminders, there is nothing to delete \U0001F60C")
-            return ConversationHandler.END
+        if len(getGroupsOfUser(context.user_data.get(
+                'user_id', userExists(update.effective_chat.id)[0]))) > 0:
+            context.user_data['act'] = 'delete_reminder'
+            reply_keyboard = [["Group", "Account"]]
+            await update.message.reply_text("To cancel action write /menu.\nPlease, select where to delete reminder from \U0001F518:",
+                                            reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True, input_field_placeholder="Where to add?"
+                                                                             ))
+            return ACTION_SELECTION
         else:
-            await update.message.reply_text(f"Select a reminder to delete \U0000274C: \n{reminders}", parse_mode=constants.ParseMode.MARKDOWN_V2)
-            return DELETE
+            reminders = listReminders(
+                context.user_data.get('user_id', userExists(update.effective_chat.id)[0]))
+            if reminders == None:
+                await update.message.reply_text(f"You have no reminders, there is nothing to delete \U0001F60C")
+                return ConversationHandler.END
+            else:
+                await update.message.reply_text(f"Select a reminder to delete \U0000274C: \n{reminders}", parse_mode=constants.ParseMode.MARKDOWN_V2)
+                return DELETE
     else:
         await update.message.reply_text(f'Seems like you have not connected your Telegram account to reminder system yet \U0001F512.\n\nProvide email:')
         return EMAIL
@@ -105,7 +144,26 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def callback_send_reminder(context: ContextTypes.DEFAULT_TYPE):
     reminders = calculateCurrentReminders()
-    await context.bot.send_message(chat_id='5528046211', text='One message every minute')
+    for rem in reminders:
+        if rem['groupId'] == None:
+            tg_id = getChatIDFromUserID(rem['userId'])
+            if tg_id != None:
+                try:
+                    await context.bot.send_message(chat_id=tg_id[0], text=f'<b>Personal reminder\U0000FE0F\n{rem["name"]}</b>\U0001F6CE\n\n<i>{rem["description"]}</i>', parse_mode='HTML')
+                except telegram.error.Forbidden:
+                    logger.info(
+                        "User with ID %s blocked the bot.", tg_id[0])
+        else:
+            users = getUsersForGroup(rem['groupId'])
+            if len(users) > 0:
+                for user in users:
+                    tg_id = getChatIDFromUserID(user)
+                    if tg_id != None:
+                        try:
+                            await context.bot.send_message(chat_id=tg_id[0], text=f'<b>Group reminder\U0000FE0F\n{rem["name"]}</b>\U0001F6CE\n\n<i>{rem["description"]}</i>', parse_mode='HTML')
+                        except telegram.error.Forbidden:
+                            logger.info(
+                                "User with ID %s blocked the bot.", tg_id)
 
 
 def main() -> None:
@@ -122,6 +180,9 @@ def main() -> None:
         states={
             EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, email)],
             PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, password)],
+            ACTION_SELECTION: [MessageHandler(filters.Regex("^(Group|Account)$"), action_set_selection)],
+            GROUP_SELECTION: [MessageHandler(filters.Regex(
+                "^[1-9][0-9]*$"), select_group)],
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_description)],
             FREQUENCY: [MessageHandler(filters.Regex("^(No repetition|Daily|Monthly|Custom)$"), set_frequency)],
@@ -138,8 +199,8 @@ def main() -> None:
         fallbacks=[CommandHandler("menu", show_menu)],
     )
     application.add_handler(conv_handler)
-    # application.job_queue.run_repeating(
-    #     callback_send_reminder, interval=60, first=3)
+    application.job_queue.run_repeating(
+        callback_send_reminder, interval=60, first=1)
     application.run_polling()
 
 

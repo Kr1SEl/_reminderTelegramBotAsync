@@ -22,6 +22,55 @@ def addUser(user_id, app_name, app_surname, app_email, tg_username, tg_chat_id):
     return (True, )
 
 
+def getChatIDFromUserID(user_id):
+    res = cur.execute(
+        f"SELECT tg_chat_id FROM user WHERE user_id = {user_id}")
+    return res.fetchone()
+
+
+def getUsersForGroup(group_id):
+    url = f"http://localhost:9080/group/{group_id}/users"
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload).json()
+    users = list()
+    for rsp in response:
+        users.append(rsp['id'])
+    return users
+
+
+def getGroupsOfUser(user_id):
+    url = f"http://localhost:9080/user/{user_id}/groups"
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload).json()
+    return response
+
+
+def parseGroups(groups):
+    message = ''
+    n = 1
+    for group in groups:
+        message += f"`№{n}: {group['name']}`\n"
+        n += 1
+    return message
+
+
+def getGroupID(user_id, index):
+    url = f"http://localhost:9080/user/{user_id}/groups"
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload).json()
+    if len(response) < 1:
+        return None
+    elif len(response) <= index-1:
+        return "incorrect_num"
+    return response[index-1]['id']
+
+
 def userExists(user_id):
     res = cur.execute(
         f"SELECT user_id, app_name FROM user WHERE tg_chat_id = {user_id}")
@@ -69,20 +118,82 @@ def listReminders(user_id):
     return message
 
 
-def deleteReminder(user_id, rem_num):
-    url = f"http://localhost:9080/user/{user_id}/reminders"
+def listGroupReminders(group_id):
+    url = f"http://localhost:9080/group/{group_id}/reminders"
     payload = {}
     headers = {}
     response = requests.request(
         "GET", url, headers=headers, data=payload).json()
     if len(response) < 1:
         return None
-    elif len(response) < rem_num-1:
+    message = ""
+    n = 1
+    for rem in response:
+        message += f"`№{n}: {rem['date']} - {rem['name']}`\n"
+        n += 1
+    return message
+
+
+def listRemindersAndGroupReminders(user_id):
+    message = ''
+    url = f"http://localhost:9080/user/{user_id}/reminders"
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload, verify=False).json()
+    n = 1
+    if len(response) > 0:
+        message += 'Personal reminders \U0001F451:\n'
+        for rem in response:
+            message += f"`№{n}: {rem['date']} - {rem['name']}`\n"
+            n += 1
+    groups = getGroupsOfUser(user_id)
+    if n > 1:
+        message += '\n'
+    if len(groups) > 0:
+        n = 1
+        message += 'Group reminders \U0001F46F:\n'
+        for group in groups:
+            url = f"http://localhost:9080/group/{group['id']}/reminders"
+            payload = {}
+            headers = {}
+            response = requests.request(
+                "GET", url, headers=headers, data=payload).json()
+            for rmd in response:
+                message += f"`№{n}: {group['name']} - {rmd['date']} - {rmd['name']}`\n"
+                n += 1
+    if message == '' or message == 'Group reminders \U0001F46F:\n':
+        return None
+    return message
+
+
+def deleteReminder(id_, rem_num, action, group_id):
+    url = ''
+    if action == 'Group':
+        if group_id != None:
+            url = f"http://localhost:9080/group/{group_id}/reminders"
+        else:
+            return 400
+    else:
+        url = f"http://localhost:9080/user/{id_}/reminders"
+    payload = {}
+    headers = {}
+    response = requests.request(
+        "GET", url, headers=headers, data=payload).json()
+    if len(response) < 1:
+        return None
+    elif len(response) <= rem_num-1:
         return "incorrect_num"
     else:
         rem_id = response[rem_num-1]['id']
-        url = f"http://localhost:9080/user/{user_id}/delete/reminder/{rem_id}"
-        print(url)
+        url = ''
+        if action == 'Group':
+            if id_ != None:
+                url = f"http://localhost:9080/group/{group_id}/delete/reminder/{rem_id}"
+            else:
+                return 400
+        else:
+            url = f"http://localhost:9080/user/{id_}/delete/reminder/{rem_id}"
         payload = {}
         headers = {}
         response = requests.request(
@@ -104,23 +215,28 @@ def fetchRemindersForAllUsers():
 
 def calculateCurrentReminders():
     reminders = fetchRemindersForAllUsers()
+    today_date = str(date.today())
+    time = datetime.now().strftime("%H:%M")
     notify = list()
     if reminders == None:
         return None
     for rem in reminders:
         if rem['period'] == 0:
-            pass
+            if rem['date'] == today_date:
+                if rem['time'][:-3] == time:
+                    notify.append(rem)
         elif rem['period'] < 0:
-            if check_reminder_months(rem['date'], rem['period'], date.now()):
-                ...
+            if check_reminder_months(rem['date'], rem['period'], today_date):
+                if rem['time'][:-3] == time:
+                    notify.append(rem)
         else:
-            if check_reminder_date(f"{rem['date']} {rem['time']}", rem['period'], date.now()):
-                ...
+            if check_reminder_days(rem['date'], rem['period'], today_date):
+                if rem['time'][:-3] == time:
+                    notify.append(rem)
     return notify
 
 
 def check_reminder_days(start_date, frequency, current_date):
-    print(current_date)
     start_date = datetime.strptime(start_date, "%Y-%m-%d")
     current_date = datetime.strptime(current_date, "%Y-%m-%d")
     delta = current_date - start_date
@@ -131,7 +247,6 @@ def check_reminder_days(start_date, frequency, current_date):
 
 
 def check_reminder_months(start_date, frequency, current_date):
-    print(current_date)
     start_date = datetime.strptime(start_date, "%Y-%m-%d")
     current_date = datetime.strptime(current_date, "%Y-%m-%d")
     delta_years = current_date.year - start_date.year
@@ -143,8 +258,15 @@ def check_reminder_months(start_date, frequency, current_date):
         return False
 
 
-def createReminder(user_id, r_name, r_desc, r_freq, r_date, r_time):
-    url = f"http://localhost:9080/user/{user_id}/add/reminder"
+def createReminder(user_id, r_name, r_desc, r_freq, r_date, r_time, action, group_id):
+    url = ''
+    if action == 'Group':
+        if group_id != None:
+            url = f"http://localhost:9080/group/{group_id}/add/reminder"
+        else:
+            return 400
+    else:
+        url = f"http://localhost:9080/user/{user_id}/add/reminder"
     payload = json.dumps({
         "name": f"{r_name}",
         "description": f"{r_desc}",
